@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.env
+.env.local
+local.db
+local.db-journal
+.open-next/
+wrangler.toml
+open-next.config.ts
+.vercel
+.codegraph/
+.omo/
+.wrangler/
+*.tsbuildinfo

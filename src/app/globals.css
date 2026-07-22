@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #e11d48;
+  --color-brand-foreground: #ffffff;
+  --color-card: #1e1b4b;
+  --color-card-foreground: #f8fafc;
+}
+
+body {
+  background: linear-gradient(135deg, #0f0a2e 0%, #1a1040 50%, #0d1b3e 100%);
+  min-height: 100vh;
+  color: #f8fafc;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@utility animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@utility animate-scale-in {
+  animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
