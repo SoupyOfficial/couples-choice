@@ -15,3 +15,13 @@ open-next.config.ts
 test-results/
 playwright-report/
 .env*
+
+# SQLite databases (root-level)
+/auth*
+/help*
+
+# Coverage output
+coverage/
+
+# Temp files
+tmp_result.txt
