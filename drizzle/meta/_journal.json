@@ -15,6 +15,13 @@
       "when": 1784755966117,
       "tag": "0001_grey_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784759627134,
+      "tag": "0002_milky_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }

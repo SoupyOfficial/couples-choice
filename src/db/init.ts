@@ -41,7 +41,7 @@ export async function ensureDbInitialized() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL REFERENCES users(id),
         movie_id INTEGER NOT NULL REFERENCES movies(id),
-        direction TEXT NOT NULL CHECK(direction IN ('left','right')),
+        direction TEXT NOT NULL CHECK(direction IN ('love','like','maybe','pass','seen','skip')),
         created_at INTEGER NOT NULL DEFAULT (unixepoch()),
         UNIQUE(user_id, movie_id)
       )

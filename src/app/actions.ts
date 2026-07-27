@@ -15,11 +15,13 @@ export async function login(userId: number): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, String(userId), {
     httpOnly: true,
+    secure: true,
     sameSite: "lax",
     path: "/",
     maxAge: MAX_AGE,
   });
-  redirect("/swipe");
+  // Don't redirect from the server action — client handles navigation
+  // to avoid mobile race condition where redirect fires before cookie is stored
 }
 
 export async function logout(): Promise<void> {

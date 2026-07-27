@@ -169,3 +169,127 @@ export async function getWatchProviders(tmdbId: number): Promise<number[]> {
     return [];
   }
 }
+
+// ── Movie details / credits / reviews (Tier 2 enrichment) ────────────────────
+
+interface TMDBMovieDetailResponse {
+  id: number;
+  title: string;
+  runtime: number | null;
+  tagline: string | null;
+  genres: { id: number; name: string }[];
+}
+
+interface TMDBCastMember {
+  id: number;
+  name: string;
+  character: string;
+  profile_path: string | null;
+  order: number;
+}
+
+interface TMDBCrewMember {
+  id: number;
+  name: string;
+  job: string;
+  department: string;
+}
+
+interface TMDBCreditsResponse {
+  id: number;
+  cast: TMDBCastMember[];
+  crew: TMDBCrewMember[];
+}
+
+interface TMDBReview {
+  id: string;
+  author: string;
+  content: string;
+}
+
+interface TMDBReviewsResponse {
+  id: number;
+  results: TMDBReview[];
+}
+
+export interface MovieDetail {
+  runtime: number | null;
+  tagline: string | null;
+}
+
+export interface MovieCastMember {
+  name: string;
+  character: string;
+  profilePath: string | null;
+}
+
+export interface MovieCredits {
+  cast: MovieCastMember[];
+  director: string | null;
+}
+
+export interface MovieReview {
+  author: string;
+  content: string;
+}
+
+export async function getMovieDetail(tmdbId: number): Promise<MovieDetail> {
+  try {
+    const response = await tmdbFetch<TMDBMovieDetailResponse>(
+      `/movie/${tmdbId}`,
+      { language: "en-US" },
+    );
+    return {
+      runtime: response.runtime ?? null,
+      tagline: response.tagline ?? null,
+    };
+  } catch {
+    return { runtime: null, tagline: null };
+  }
+}
+
+export async function getMovieCredits(tmdbId: number): Promise<MovieCredits> {
+  try {
+    const response = await tmdbFetch<TMDBCreditsResponse>(
+      `/movie/${tmdbId}/credits`,
+      { language: "en-US" },
+    );
+
+    const cast = response.cast
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .slice(0, 5)
+      .map((c) => ({
+        name: c.name,
+        character: c.character,
+        profilePath: c.profile_path,
+      }));
+
+    const directorCrew = response.crew.find(
+      (c) => c.job === "Director" && c.department === "Directing",
+    );
+    const director = directorCrew ? directorCrew.name : null;
+
+    return { cast, director };
+  } catch {
+    return { cast: [], director: null };
+  }
+}
+
+export async function getMovieReviews(tmdbId: number): Promise<MovieReview[]> {
+  try {
+    const response = await tmdbFetch<TMDBReviewsResponse>(
+      `/movie/${tmdbId}/reviews`,
+      { language: "en-US", page: 1 },
+    );
+
+    return response.results
+      .slice(0, 3)
+      .map((r) => ({
+        author: r.author,
+        content: r.content.length > 300 ? r.content.slice(0, 300) + "…" : r.content,
+      }));
+  } catch {
+    return [];
+  }
+}

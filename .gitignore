@@ -12,3 +12,6 @@ open-next.config.ts
 .omo/
 .wrangler/
 *.tsbuildinfo
+test-results/
+playwright-report/
+.env*

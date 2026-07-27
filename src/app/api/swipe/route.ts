@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { db } from "@/db";
 import { swipes, movies } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { recordSwipeSignal } from "@/lib/interests/signals";
+import { enrichMovie } from "@/lib/llm/enrich-movie";
 
 
 export async function POST(request: Request) {
@@ -16,16 +18,17 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { movieId, direction } = body as {
     movieId: number;
-    direction: string;
+    direction: "love" | "like" | "maybe" | "pass" | "seen" | "skip";
   };
 
+  const VALID_DIRECTIONS = ["love", "like", "maybe", "pass", "seen", "skip"];
   if (
     !movieId ||
     typeof movieId !== "number" ||
-    (direction !== "left" && direction !== "right")
+    !VALID_DIRECTIONS.includes(direction)
   ) {
     return NextResponse.json(
-      { error: "Invalid request body. Expected { movieId: number, direction: 'left' | 'right' }" },
+      { error: "Invalid request body. Expected { movieId: number, direction: 'love' | 'like' | 'maybe' | 'pass' | 'seen' | 'skip' }" },
       { status: 400 }
     );
   }
@@ -34,6 +37,19 @@ export async function POST(request: Request) {
     const existing = await db.select({ id: movies.id }).from(movies).where(eq(movies.id, movieId)).get();
     if (!existing) {
       return NextResponse.json({ error: "Movie not found" }, { status: 404 });
+    }
+
+    // If user previously skipped this movie, remove the skip so they can swipe again
+    const existingSwipe = await db
+      .select({ direction: swipes.direction })
+      .from(swipes)
+      .where(and(eq(swipes.userId, userIdNum), eq(swipes.movieId, movieId)))
+      .get();
+
+    if (existingSwipe?.direction === "skip") {
+      await db
+        .delete(swipes)
+        .where(and(eq(swipes.userId, userIdNum), eq(swipes.movieId, movieId)));
     }
 
     const [swipe] = await db
@@ -45,26 +61,48 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    if (direction === "left") {
+    if (direction !== "seen" && direction !== "skip" && direction !== "maybe") {
+      recordSwipeSignal(userIdNum, movieId, direction).catch(err =>
+        console.error('Failed to record interest signals:', err)
+      );
+    }
+
+    if (direction === "skip") {
+      return NextResponse.json({ matched: false, skipped: true });
+    }
+
+    if (direction === "pass" || direction === "seen") {
       return NextResponse.json({ matched: false });
     }
 
     const otherUserId = userIdNum === 1 ? 2 : 1;
 
-    const [match] = await db
+    const [otherSwipe] = await db
       .select()
       .from(swipes)
       .where(
         and(
           eq(swipes.userId, otherUserId),
-          eq(swipes.movieId, movieId),
-          eq(swipes.direction, "right")
+          eq(swipes.movieId, movieId)
         )
       );
 
-    if (match) {
-      return NextResponse.json({ matched: true, matchId: match.id });
+    const otherDir = otherSwipe?.direction;
+    const isMatch = otherDir && otherDir !== "pass" && otherDir !== "seen" && otherDir !== "skip" && (
+      direction === "love" ||
+      otherDir === "love" ||
+      (direction === "like" && otherDir === "like")
+    );
+
+    if (isMatch) {
+      const matchQuality = direction === "love" && otherDir === "love" ? "strong" : "standard";
+      return NextResponse.json({ matched: true, matchId: otherSwipe.id, matchQuality });
     }
+
+    // Fire-and-forget: LLM enrichment (checks cache internally)
+    enrichMovie(movieId).catch(err =>
+      console.error('Failed to enrich movie:', err)
+    );
 
     return NextResponse.json({ matched: false });
   } catch (err: unknown) {
