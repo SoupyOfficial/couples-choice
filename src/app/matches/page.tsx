@@ -1,10 +1,12 @@
 import { getCurrentUser } from "@/app/actions";
 import { redirect } from "next/navigation";
+import { MarkViewed } from "./mark-viewed";
 import Link from "next/link";
 import { db } from "@/db";
 import { movies, swipes } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getImageUrl, STREAMING_PROVIDERS } from "@/lib/tmdb";
+import { getProviderColor } from "@/lib/provider-colors";
 
 
 function getYear(dateStr: string | null): string {
@@ -28,23 +30,9 @@ function parseProviderIds(raw: string | null): { id: number; name: string }[] {
   }
 }
 
-const providerColors: Record<string, string> = {
-  Netflix: "bg-red-600",
-  "Amazon Prime": "bg-blue-500",
-  "Disney+": "bg-blue-700",
-  Max: "bg-purple-600",
-  Hulu: "bg-green-500",
-  "Apple TV+": "bg-gray-500",
-  Peacock: "bg-yellow-500",
-  "Paramount+": "bg-blue-400",
-};
-
-function getProviderColor(name: string): string {
-  return providerColors[name] ?? "bg-slate-600";
-}
-
 function MovieCard({
   movie,
+  matchQuality,
 }: {
   movie: {
     tmdbId: number;
@@ -54,6 +42,7 @@ function MovieCard({
     voteAverage: number | null;
     providerIds: string | null;
   };
+  matchQuality?: "strong" | "standard";
 }) {
   const posterUrl = getImageUrl(movie.posterPath, "w342");
   const year = getYear(movie.releaseDate);
@@ -66,7 +55,12 @@ function MovieCard({
       rel="noopener noreferrer"
       className="group block rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 overflow-hidden shadow-lg hover:shadow-xl hover:border-white/20 transition-all duration-300"
     >
-      <div className="aspect-[2/3] overflow-hidden bg-white/5">
+      <div className="aspect-[2/3] overflow-hidden bg-white/5 relative">
+        {matchQuality && (
+          <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold text-white ${matchQuality === "strong" ? "bg-pink-500" : "bg-brand"}`}>
+            {matchQuality === "strong" ? "Strong Match 💕" : "Match"}
+          </div>
+        )}
         {posterUrl ? (
           <img
             src={posterUrl}
@@ -114,30 +108,53 @@ export default async function MatchesPage() {
   // db imported at top;
 
   const user1Swipes = await db
-    .select({ movieId: swipes.movieId })
+    .select({ movieId: swipes.movieId, direction: swipes.direction })
     .from(swipes)
-    .where(and(eq(swipes.userId, 1), eq(swipes.direction, "right")));
+    .where(and(eq(swipes.userId, 1), inArray(swipes.direction, ["love", "like", "maybe"])));
 
   const user2Swipes = await db
-    .select({ movieId: swipes.movieId })
+    .select({ movieId: swipes.movieId, direction: swipes.direction })
     .from(swipes)
-    .where(and(eq(swipes.userId, 2), eq(swipes.direction, "right")));
+    .where(and(eq(swipes.userId, 2), inArray(swipes.direction, ["love", "like", "maybe"])));
 
-  const user1Ids = new Set(user1Swipes.map((s) => s.movieId));
-  const matchedIds = user2Swipes
-    .filter((s) => user1Ids.has(s.movieId))
-    .map((s) => s.movieId);
+  const user1Map = new Map<number, string>();
+  for (const s of user1Swipes) {
+    user1Map.set(s.movieId, s.direction);
+  }
 
-  let matchedMovies: typeof movies.$inferSelect[] = [];
+  const matchedEntries: { movieId: number; quality: "strong" | "standard" }[] = [];
+  for (const s of user2Swipes) {
+    const user1Dir = user1Map.get(s.movieId);
+    if (!user1Dir) continue;
+
+    const isMatch =
+      user1Dir === "love" ||
+      s.direction === "love" ||
+      (user1Dir === "like" && s.direction === "like");
+
+    if (isMatch) {
+      const quality = user1Dir === "love" && s.direction === "love" ? "strong" : "standard";
+      matchedEntries.push({ movieId: s.movieId, quality });
+    }
+  }
+
+  const matchedIds = matchedEntries.map((e) => e.movieId);
+  const matchQualityMap = new Map(matchedEntries.map((e) => [e.movieId, e.quality]));
+
+  let matchedMovies: (typeof movies.$inferSelect & { matchQuality?: "strong" | "standard" })[] = [];
   if (matchedIds.length > 0) {
-    matchedMovies = await db
+    const moviesData = await db
       .select()
       .from(movies)
       .where(inArray(movies.id, matchedIds));
+    matchedMovies = moviesData.map((m) => ({
+      ...m,
+      matchQuality: matchQualityMap.get(m.id),
+    }));
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center px-4 py-6 sm:py-8">
+    <main className="flex min-h-dvh flex-col items-center px-4 py-6 sm:py-8">
       {/* Header */}
       <div className="w-full max-w-4xl mb-6">
         <div className="flex items-center justify-between">
@@ -178,10 +195,11 @@ export default async function MatchesPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full max-w-4xl">
           {matchedMovies.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
+            <MovieCard key={movie.id} movie={movie} matchQuality={movie.matchQuality} />
           ))}
         </div>
       )}
+      <MarkViewed count={matchedIds.length} />
     </main>
   );
 }

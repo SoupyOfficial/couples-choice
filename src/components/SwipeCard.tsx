@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import MovieDetailModal from "./MovieDetailModal";
 import MatchModal from "./MatchModal";
+import { getProviderColor } from "@/lib/provider-colors";
+import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 
 interface Movie {
   id: number;
@@ -14,26 +17,10 @@ interface Movie {
   voteAverage: number;
   providers: string[];
   otherLiked?: boolean;
+  otherSwiped?: string | null;
 }
 
-type SwipeDirection = "left" | "right" | null;
-
-const providerColors: Record<string, string> = {
-  Netflix: "bg-red-600",
-  Prime: "bg-blue-500",
-  "Amazon Prime": "bg-blue-500",
-  "Disney+": "bg-blue-700",
-  Max: "bg-purple-600",
-  Hulu: "bg-green-500",
-  "Apple+": "bg-gray-500",
-  "Apple TV+": "bg-gray-500",
-  Peacock: "bg-yellow-500",
-  "Paramount+": "bg-blue-400",
-};
-
-function getProviderColor(name: string): string {
-  return providerColors[name] ?? "bg-slate-600";
-}
+type SwipeDirection = "love" | "like" | "maybe" | "pass" | "seen" | "skip" | null;
 
 function truncate(text: string, maxLines: number = 3): string {
   const charsPerLine = 50;
@@ -100,14 +87,36 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
+function partnerBadge(direction: string | null | undefined): { emoji: string; label: string; className: string } | null {
+  if (!direction) return null;
+  switch (direction) {
+    case "love":
+      return { emoji: "❤️", label: "They loved this!", className: "bg-rose-500/20 text-rose-300" };
+    case "like":
+      return { emoji: "👍", label: "They liked this", className: "bg-blue-500/20 text-blue-300" };
+    case "maybe":
+      return { emoji: "🤷", label: "They're on the fence", className: "bg-amber-500/20 text-amber-300" };
+    case "pass":
+      return { emoji: "👎", label: "They passed", className: "bg-slate-500/20 text-slate-300" };
+    case "seen":
+      return { emoji: "👁️", label: "They've seen it", className: "bg-gray-500/20 text-gray-300" };
+    case "skip":
+      return { emoji: "⏭️", label: "They skipped it", className: "bg-amber-500/20 text-amber-300" };
+    default:
+      return null;
+  }
+}
+
 export default function SwipeCard() {
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [swipeDirection, setSwipeDirection] = useState<SwipeDirection>(null);
-  const [matchedMovie, setMatchedMovie] = useState<{ title: string; posterUrl: string; providers: string[] } | null>(null);
   const [animating, setAnimating] = useState(false);
   const [page, setPage] = useState(1);
+  const [skipToast, setSkipToast] = useState(false);
+  const [matchMovie, setMatchMovie] = useState<{ title: string; posterUrl: string; providers: string[] } | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const fetchMovie = useCallback(async (pageNum?: number) => {
     setLoading(true);
@@ -117,6 +126,10 @@ export default function SwipeCard() {
     try {
       const res = await fetch(`/api/movies/next?page=${targetPage}`);
       if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
         if (res.status === 404) {
           setMovie(null);
           setLoading(false);
@@ -138,9 +151,10 @@ export default function SwipeCard() {
     fetchMovie();
   }, [fetchMovie]);
 
-  const handleSwipe = async (direction: "left" | "right") => {
+  const handleSwipe = async (direction: "love" | "like" | "maybe" | "pass" | "seen" | "skip") => {
     if (!movie || animating) return;
     setAnimating(true);
+    setDetailModalOpen(false);
     setSwipeDirection(direction);
 
     try {
@@ -152,23 +166,37 @@ export default function SwipeCard() {
       const data = await res.json();
 
       if (data.matched) {
-        setMatchedMovie({
+        setMatchMovie({
           title: movie.title,
           posterUrl: movie.posterUrl ?? "",
           providers: movie.providers,
         });
       }
+      if (data.skipped) {
+        setSkipToast(true);
+        setTimeout(() => setSkipToast(false), 2000);
+      }
     } catch {
       // Swipe recorded locally even if API fails
     }
 
-    // Wait for animation to complete, then load next
     setTimeout(() => {
       setSwipeDirection(null);
       setAnimating(false);
       fetchMovie();
     }, 400);
   };
+
+  const handleCardClick = useCallback(() => {
+    if (animating || !movie) return;
+    setDetailModalOpen(true);
+  }, [animating, movie]);
+
+  const { handlers } = useSwipeGesture({
+    onSwipe: (direction) => handleSwipe(direction),
+    onTap: handleCardClick,
+    enabled: !animating && !!movie,
+  });
 
   if (loading) {
     return <SkeletonCard />;
@@ -184,17 +212,43 @@ export default function SwipeCard() {
 
   const year = getYear(movie.releaseDate);
   const swipeClass =
-    swipeDirection === "left"
+    swipeDirection === "pass"
       ? "-translate-x-full -rotate-12 opacity-0"
-      : swipeDirection === "right"
-        ? "translate-x-full rotate-12 opacity-0"
-        : "translate-x-0 rotate-0 opacity-100";
+      : swipeDirection === "like"
+        ? "translate-x-full rotate-6 opacity-0"
+        : swipeDirection === "love"
+          ? "translate-x-full rotate-12 scale-110 opacity-0"
+          : swipeDirection === "maybe"
+            ? "scale-90 opacity-0"
+            : swipeDirection === "seen"
+              ? "scale-95 opacity-0"
+              : swipeDirection === "skip"
+                ? "scale-90 -translate-y-8 opacity-0"
+                : "translate-x-0 rotate-0 opacity-100";
+
+  const partner = partnerBadge(movie.otherSwiped);
 
   return (
     <>
       {/* Movie Card */}
       <div
-        className={`relative w-full rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 overflow-hidden shadow-2xl transition-all duration-300 ease-out ${swipeClass}`}
+        {...handlers}
+        tabIndex={0}
+        role="button"
+        aria-label={`${movie.title} — tap for details, swipe to rate`}
+        onKeyDown={(e) => {
+          if (animating || !movie) return;
+          switch (e.key) {
+            case "ArrowLeft": e.preventDefault(); handleSwipe("pass"); break;
+            case "ArrowRight": e.preventDefault(); handleSwipe("like"); break;
+            case "ArrowUp": e.preventDefault(); handleSwipe("love"); break;
+            case "ArrowDown": e.preventDefault(); handleSwipe("maybe"); break;
+            case "Enter":
+            case " ": e.preventDefault(); handleCardClick(); break;
+          }
+        }}
+        className={`group relative w-full rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 overflow-hidden shadow-2xl transition-all duration-300 ease-out cursor-pointer hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 ${swipeClass}`}
+        style={{ touchAction: "none" }}
       >
         {/* Backdrop Image */}
         {movie.backdropUrl && (
@@ -202,7 +256,7 @@ export default function SwipeCard() {
             <img
               src={movie.backdropUrl}
               alt=""
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               loading="lazy"
             />
             {/* Gradient overlay */}
@@ -227,13 +281,13 @@ export default function SwipeCard() {
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h2 className="text-xl sm:text-2xl font-bold text-white truncate">
                   {movie.title}
                 </h2>
-                {movie.otherLiked && (
-                  <span className="text-xs text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full animate-pulse whitespace-nowrap">
-                    ❤️ They liked this!
+                {partner && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${partner.className}`}>
+                    {partner.emoji} {partner.label}
                   </span>
                 )}
               </div>
@@ -270,33 +324,105 @@ export default function SwipeCard() {
             </div>
           </div>
         </div>
+
+        {/* Tap-for-details indicator */}
+        <div className="absolute bottom-2 right-3 text-[10px] uppercase tracking-wider text-white/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none select-none">
+          Tap for details
+        </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center justify-center gap-6 mt-6">
+      <div className="mt-6 flex flex-col items-center gap-3">
+        {/* Row 1 — primary decisions */}
+        <div className="flex items-center justify-center gap-5 sm:gap-7">
+          <button
+            onClick={(e) => { e.stopPropagation(); handleSwipe("pass"); }}
+            disabled={animating}
+            className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 text-2xl sm:text-3xl shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Pass"
+          >
+            👎
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleSwipe("like"); }}
+            disabled={animating}
+            className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-2xl sm:text-3xl shadow-lg shadow-blue-500/30 transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Like"
+          >
+            👍
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleSwipe("love"); }}
+            disabled={animating}
+            className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-rose-500 to-rose-700 hover:from-rose-400 hover:to-rose-600 text-2xl sm:text-3xl shadow-lg shadow-rose-500/30 transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Love"
+          >
+            ❤️
+          </button>
+        </div>
+
+        {/* Row 2 — conditional signal */}
         <button
-          onClick={() => handleSwipe("left")}
+          onClick={(e) => { e.stopPropagation(); handleSwipe("maybe"); }}
           disabled={animating}
-          className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 text-3xl sm:text-4xl shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Pass"
+          className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-xl sm:text-2xl shadow-lg shadow-amber-500/20 transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Maybe"
         >
-          ❌
+          🤷
         </button>
-        <button
-          onClick={() => handleSwipe("right")}
-          disabled={animating}
-          className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-rose-500 to-rose-700 hover:from-rose-400 hover:to-rose-600 text-3xl sm:text-4xl shadow-lg shadow-rose-500/30 transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Like"
-        >
-          ❤️
-        </button>
+
+        {/* Row 3 — utilities */}
+        <div className="flex items-center justify-between w-full max-w-xs px-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); handleSwipe("seen"); }}
+            disabled={animating}
+            className="flex items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 hover:from-gray-300 hover:to-gray-400 text-lg sm:text-xl shadow-md transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Seen it"
+          >
+            👁️
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleSwipe("skip"); }}
+            disabled={animating}
+            className="flex items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-lg sm:text-xl shadow-md transition-all duration-300 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Skip — show later"
+          >
+            ⏭️
+          </button>
+        </div>
       </div>
 
       {/* Match Modal */}
-      {matchedMovie && (
+      {matchMovie && (
         <MatchModal
-          movie={matchedMovie}
-          onClose={() => setMatchedMovie(null)}
+          movie={matchMovie}
+          onClose={() => setMatchMovie(null)}
+        />
+      )}
+
+      {/* Skip Toast */}
+      {skipToast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-amber-500/90 backdrop-blur-sm text-white text-sm font-medium rounded-full shadow-lg animate-bounce pb-safe">
+          Skipped — may appear again later
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {detailModalOpen && movie && (
+        <MovieDetailModal
+          movieId={movie.id}
+          movie={{
+            title: movie.title,
+            overview: movie.overview,
+            posterUrl: movie.posterUrl,
+            backdropUrl: movie.backdropUrl,
+            releaseDate: movie.releaseDate,
+            voteAverage: movie.voteAverage,
+            providers: movie.providers,
+          }}
+          otherSwiped={movie.otherSwiped ?? null}
+          onClose={() => setDetailModalOpen(false)}
+          onSwipe={(direction) => handleSwipe(direction)}
         />
       )}
     </>

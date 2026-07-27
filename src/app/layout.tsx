@@ -1,7 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import Link from "next/link";
 import { logout, getCurrentUser } from "@/app/actions";
+import { db } from "@/db";
+import { swipes } from "@/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import NavBar from "@/components/layout/NavBar";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,80 +13,57 @@ export const metadata: Metadata = {
   description: "Swipe on movies together and find your perfect match.",
 };
 
-async function NavBar() {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get("current-user")?.value;
-
-  if (!userId) {
-    return (
-      <nav className="w-full px-4 py-3 border-b border-white/10">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <span className="text-lg font-semibold text-white/80">
-            Couple&apos;s Choice
-          </span>
-        </div>
-      </nav>
-    );
-  }
-
-  const user = await getCurrentUser();
-  const emoji = user?.emoji ?? "👤";
-  const name = user?.name ?? "User";
-
-  return (
-    <nav className="w-full px-4 py-3 border-b border-white/10 backdrop-blur-md bg-white/5">
-      <div className="max-w-4xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Link
-            href="/swipe"
-            className="text-lg font-semibold text-white/90 hover:text-white transition-colors"
-          >
-            Couple&apos;s Choice
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/swipe"
-              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-sm font-medium transition-all duration-300"
-            >
-              Swipe
-            </Link>
-            <Link
-              href="/matches"
-              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-sm font-medium transition-all duration-300"
-            >
-              💕 Matches
-            </Link>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-white/70">
-            {emoji} {name}
-          </span>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-white/50 hover:text-white/80 underline transition-colors"
-            >
-              Not {name}?
-            </button>
-          </form>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
-// Initialize DB on first request
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f0a2e",
+};
 
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = await cookies();
+  const userId = cookieStore.get("current-user")?.value;
+  const user = await getCurrentUser();
+  const emoji = user?.emoji ?? "👤";
+  const name = user?.name ?? "User";
+
+  // Compute match count once for both navs
+  let newMatchCount = 0;
+  if (userId) {
+    const lastSeenCount = parseInt(cookieStore.get("match-count-last-seen")?.value || "0");
+    const user1Swipes = await db
+      .select({ movieId: swipes.movieId, direction: swipes.direction })
+      .from(swipes)
+      .where(and(eq(swipes.userId, 1), inArray(swipes.direction, ["love", "like", "maybe"])));
+    const user2Swipes = await db
+      .select({ movieId: swipes.movieId, direction: swipes.direction })
+      .from(swipes)
+      .where(and(eq(swipes.userId, 2), inArray(swipes.direction, ["love", "like", "maybe"])));
+
+    const user1Map = new Map<number, string>();
+    for (const s of user1Swipes) user1Map.set(s.movieId, s.direction);
+
+    const totalMatches = user2Swipes.filter((s) => {
+      const user1Dir = user1Map.get(s.movieId);
+      if (!user1Dir) return false;
+      return (
+        user1Dir === "love" ||
+        s.direction === "love" ||
+        (user1Dir === "like" && s.direction === "like")
+      );
+    }).length;
+    newMatchCount = Math.max(0, totalMatches - lastSeenCount);
+  }
+
   return (
     <html lang="en">
       <body className="antialiased">
-        <NavBar />
+        <NavBar className="hidden md:flex" newMatchCount={newMatchCount} user={user} name={name} emoji={emoji} />
+        <MobileBottomNav className="md:hidden" newMatchCount={newMatchCount} showPreferences={!user?.extractedPrefs} />
         {children}
       </body>
     </html>

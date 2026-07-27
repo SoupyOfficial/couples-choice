@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 
 interface MatchModalProps {
@@ -12,6 +13,37 @@ interface MatchModalProps {
 }
 
 export default function MatchModal({ movie, onClose }: MatchModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    previouslyFocused.current = document.activeElement as HTMLElement;
+    const focusables = el.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    first?.focus();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Tab") {
+        const active = document.activeElement;
+        if (e.shiftKey && active === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && active === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = prevOverflow;
+      previouslyFocused.current?.focus?.();
+    };
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -26,7 +58,7 @@ export default function MatchModal({ movie, onClose }: MatchModalProps) {
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-gradient-to-b from-white/15 to-white/5 backdrop-blur-xl border border-white/20 shadow-2xl p-6 sm:p-8 animate-scale-in">
+      <div ref={dialogRef} className="relative z-10 w-full max-w-sm rounded-2xl bg-gradient-to-b from-white/15 to-white/5 backdrop-blur-xl border border-white/20 shadow-2xl p-6 sm:p-8 pb-safe animate-scale-in">
         {/* Hearts decoration */}
         <div className="text-center mb-4">
           <span className="text-4xl">💕</span>

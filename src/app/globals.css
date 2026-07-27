@@ -5,11 +5,21 @@
   --color-brand-foreground: #ffffff;
   --color-card: #1e1b4b;
   --color-card-foreground: #f8fafc;
+  --text-body: clamp(1rem, 0.9rem + 0.5vw, 1.25rem);
+  --text-heading: clamp(1.5rem, 1rem + 3vw, 2.5rem);
+}
+
+@utility pb-safe {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
 }
 
 body {
   background: linear-gradient(135deg, #0f0a2e 0%, #1a1040 50%, #0d1b3e 100%);
-  min-height: 100vh;
+  min-height: 100dvh;
   color: #f8fafc;
 }
 
@@ -21,6 +31,11 @@ body {
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.8); }
   to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 @utility animate-fade-in {
