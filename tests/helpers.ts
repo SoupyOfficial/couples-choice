@@ -1,5 +1,9 @@
 import { Page } from '@playwright/test';
 
+// Persona user names from seed-personas.ts — use these for all tests
+export const PARTNER_1_NAME = "Margaret";
+export const PARTNER_2_NAME = "Harold";
+
 export async function loginAs(page: Page, userName: string) {
   await page.goto('/login');
   await page.locator(`button:has-text("${userName}")`).click();
@@ -33,4 +37,8 @@ export async function selectMood(page: Page, moods: string[]) {
 
 export async function goToMatches(page: Page) {
   await page.goto('/matches');
+}
+
+export async function goToPick(page: Page) {
+  await page.goto('/pick');
 }
