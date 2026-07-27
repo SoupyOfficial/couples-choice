@@ -157,13 +157,25 @@ export default function SwipeCard() {
     setDetailModalOpen(false);
     setSwipeDirection(direction);
 
+    let swipeRecorded = false;
     try {
       const res = await fetch("/api/swipe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ movieId: movie.id, direction }),
       });
+
+      if (!res.ok) {
+        // Swipe wasn't recorded — abort and show error
+        console.error("Swipe failed:", res.status);
+        setError(`Swipe failed (${res.status}). Tap to retry.`);
+        setAnimating(false);
+        setSwipeDirection(null);
+        return;
+      }
+
       const data = await res.json();
+      swipeRecorded = true;
 
       if (data.matched) {
         setMatchMovie({
@@ -176,14 +188,18 @@ export default function SwipeCard() {
         setSkipToast(true);
         setTimeout(() => setSkipToast(false), 2000);
       }
-    } catch {
-      // Swipe recorded locally even if API fails
+    } catch (err) {
+      console.error("Swipe network error:", err);
+      setError("Network error. Tap to retry.");
+      setAnimating(false);
+      setSwipeDirection(null);
+      return;
     }
 
     setTimeout(() => {
       setSwipeDirection(null);
       setAnimating(false);
-      fetchMovie();
+      if (swipeRecorded) fetchMovie();
     }, 400);
   };
 

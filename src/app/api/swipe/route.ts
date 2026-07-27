@@ -75,7 +75,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ matched: false });
     }
 
-    const otherUserId = userIdNum === 1 ? 2 : 1;
+    const otherUserId = userIdNum === 1 ? 2 : userIdNum === 2 ? 1 : null;
+
+    if (!otherUserId) {
+      return NextResponse.json({ matched: false });
+    }
 
     const [otherSwipe] = await db
       .select()
