@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 
 interface MatchModalProps {
@@ -15,6 +15,8 @@ interface MatchModalProps {
 export default function MatchModal({ movie, onClose }: MatchModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const el = dialogRef.current;
@@ -29,7 +31,7 @@ export default function MatchModal({ movie, onClose }: MatchModalProps) {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Escape") { onCloseRef.current(); return; }
       if (e.key === "Tab") {
         const active = document.activeElement;
         if (e.shiftKey && active === first) { e.preventDefault(); last?.focus(); }
@@ -42,7 +44,7 @@ export default function MatchModal({ movie, onClose }: MatchModalProps) {
       document.body.style.overflow = prevOverflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

@@ -12,6 +12,7 @@ const client =
   globalForDb.client ??
   createClient({
     url: process.env.DATABASE_URL ?? "file:./local.db",
+    authToken: process.env.DATABASE_AUTH_TOKEN,
   });
 
 if (process.env.NODE_ENV !== "production") globalForDb.client = client;
@@ -22,10 +23,13 @@ export const db = globalForDb.db ?? dbInstance;
 
 if (process.env.NODE_ENV !== "production") globalForDb.db = db;
 
-// Auto-initialize tables and seed data on first DB access
+// Auto-initialize tables and seed data on first DB access (local only — use migrations for Turso)
 async function initDb() {
   if (globalForDb.initialized) return;
   globalForDb.initialized = true;
+
+  const dbUrl = process.env.DATABASE_URL ?? "file:./local.db";
+  if (dbUrl.startsWith("libsql://") || dbUrl.startsWith("http")) return;
 
   try {
     await client.execute(`
@@ -55,7 +59,7 @@ async function initDb() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL REFERENCES users(id),
         movie_id INTEGER NOT NULL REFERENCES movies(id),
-        direction TEXT NOT NULL CHECK(direction IN ('left','right')),
+        direction TEXT NOT NULL CHECK(direction IN ('love','like','maybe','pass','seen','skip')),
         created_at INTEGER NOT NULL DEFAULT (unixepoch()),
         UNIQUE(user_id, movie_id)
       )
@@ -76,4 +80,5 @@ async function initDb() {
 }
 
 // Trigger initialization (lazy — runs on first import)
-initDb();
+// Export a promise so consumers can await DB readiness before querying
+export const dbReady = initDb();

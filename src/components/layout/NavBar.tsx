@@ -8,7 +8,7 @@ interface NavBarProps {
     id: number;
     name: string;
     emoji: string;
-    extractedPrefs: boolean;
+    extractedPrefs: string | null;
   } | null;
   name: string;
   emoji: string;
@@ -23,7 +23,7 @@ export default function NavBar({ className = "", newMatchCount, user, name, emoj
             Couple&apos;s Choice
           </Link>
           <div className="flex items-center gap-3">
-            {!user?.extractedPrefs && (
+            {(user?.extractedPrefs == null) && (
               <Link href="/onboarding" className="px-3 py-1.5 rounded-lg bg-brand/20 hover:bg-brand/30 text-brand hover:text-brand/90 text-sm font-medium transition-all duration-300">
                 Preferences
               </Link>
