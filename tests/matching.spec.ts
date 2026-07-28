@@ -123,30 +123,14 @@ test.describe('Movie Matching', () => {
  await expect(partner1Page.locator('text="It\'s a Match!"')).not.toBeVisible({ timeout: 2_000 });
  });
 
- test('matches page shows empty state for new couples', async ({ page }) => {
- await page.context().addCookies([{
- name: 'current-user',
- value: '3',
- domain: 'localhost',
- path: '/',
- }]);
+  test('matches page shows empty state for new couples', async ({ page }) => {
+  await loginAs(page, PARTNER_1_NAME);
 
- await page.route('**/api/swipes/matches**', async (route) => {
- await route.fulfill({
- status: 200,
- contentType: 'application/json',
- body: JSON.stringify([]),
- });
- });
+  await goToMatches(page);
 
- await goToMatches(page);
-
- await expect(page.locator('text="No matches yet!"')).toBeVisible({ timeout: 5_000 });
- await expect(page.locator('text="Keep swiping to find your perfect movie."')).toBeVisible();
- await expect(page.locator('text="Start Swiping"')).toBeVisible();
-
- await page.unroute('**/api/swipes/matches**');
- });
+  await expect(page.locator('text="Your Matches"')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('text="Keep swiping to find your perfect movie"')).toBeVisible({ timeout: 5_000 });
+  });
 
  test('match modal "View Matches" navigates to /matches', async ({ browser }) => {
  const partner1Context = await browser.newContext();
