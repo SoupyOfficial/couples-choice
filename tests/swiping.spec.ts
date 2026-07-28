@@ -106,9 +106,8 @@ test.describe('Movie Swiping', () => {
   });
   });
 
-  await page.reload();
-
-  await expect(page.locator('.animate-pulse')).toBeVisible({ timeout: 3_000 });
+  await page.goto('/swipe');
+  await expect(page.locator('.animate-pulse')).toBeVisible({ timeout: 5_000 });
 
   await page.unroute('**/api/movies/next**');
   await expect(page.locator('h2', { hasText: 'Test Movie' })).toBeVisible({ timeout: 5_000 });

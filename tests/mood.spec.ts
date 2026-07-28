@@ -71,10 +71,10 @@ test.describe('Mood-Based Filtering', () => {
     await page.waitForSelector('h3', { timeout: 10_000 });
 
     await selectMood(page, ['Sci-Fi', 'Horror']);
-    expect(page.url()).toContain('mood=');
+    await page.waitForFunction(() => window.location.href.includes('mood='), { timeout: 5_000 });
 
     await page.locator('button:has-text("Surprise Me")').click();
-    await page.waitForTimeout(500);
+    await page.waitForFunction(() => !window.location.href.includes('mood='), { timeout: 5_000 });
 
     // After Surprise Me, mood param should be gone
     expect(page.url()).not.toContain('mood=');
