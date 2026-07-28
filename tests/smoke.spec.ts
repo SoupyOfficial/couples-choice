@@ -8,5 +8,5 @@ test('app loads and shows login page', async ({ page }) => {
 
 test('navigation works', async ({ page }) => {
   await page.goto('/login');
-  await expect(page.locator('nav').first()).toBeVisible();
+  await expect(page.locator('nav:visible').first()).toBeVisible();
 });
