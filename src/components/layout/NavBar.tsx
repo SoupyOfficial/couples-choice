@@ -42,6 +42,9 @@ export default function NavBar({ className = "", newMatchCount, user, name, emoj
                 </span>
               )}
             </Link>
+            <Link href="/dev" className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-sm font-medium transition-all duration-300">
+              🛠 Dev
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">

@@ -35,6 +35,10 @@ export default function MobileBottomNav({ className = "", newMatchCount, showPre
             <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-brand rounded-full">{newMatchCount}</span>
           )}
         </Link>
+        <Link href="/dev" className={linkClass("/dev")}>
+          <span className="text-lg">🛠</span>
+          <span className="text-[10px] font-medium">Dev</span>
+        </Link>
         {showPreferences && (
           <Link href="/onboarding" className={linkClass("/onboarding")}>
             <span className="text-lg">⚙️</span>
