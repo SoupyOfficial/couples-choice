@@ -18,6 +18,7 @@ interface DevContentProps {
   movies: Movie[];
   swipes: Swipe[];
   signals: InterestSignal[];
+  errors?: string[];
 }
 
 function getYear(dateStr: string | null): string {
@@ -59,7 +60,7 @@ function getMovieInfo(movieId: number, movies: Movie[]) {
   return m ? `${m.title} (${getYear(m.releaseDate)})` : `Movie ${movieId}`;
 }
 
-export function DevContent({ users, movies, swipes, signals }: DevContentProps) {
+export function DevContent({ users, movies, swipes, signals, errors = [] }: DevContentProps) {
   const [activeTab, setActiveTab] = useState<"users-movies" | "swipes" | "signals">(
     "users-movies",
   );
@@ -135,6 +136,23 @@ export function DevContent({ users, movies, swipes, signals }: DevContentProps) 
         </div>
       </div>
 
+      {/* Error Banner */}
+      {errors.length > 0 && (
+        <div className="w-full max-w-6xl p-4 rounded-2xl bg-red-500/10 backdrop-blur-md border border-red-500/30">
+          <p className="text-red-300 font-semibold mb-2">
+            Query Errors &mdash; Some data may be missing
+          </p>
+          <ul className="list-disc list-inside space-y-1">
+            {errors.map((err, i) => (
+              <li key={i} className="text-red-200/80 text-sm">{err}</li>
+            ))}
+          </ul>
+          <p className="text-red-300/60 text-xs mt-3">
+            Run <code className="text-red-300/80 bg-red-500/10 px-1 rounded">drizzle-kit migrate</code> against this database to create missing tables.
+          </p>
+        </div>
+      )}
+
       {/* Tab Buttons */}
       <div className="flex gap-2">
         <button
@@ -175,6 +193,11 @@ export function DevContent({ users, movies, swipes, signals }: DevContentProps) 
       {/* Tab Content */}
       {activeTab === "users-movies" && (
         <div className="space-y-8">
+          {users.length === 0 && errors.some((e) => e.includes("users")) && (
+            <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 text-sm">
+              Could not load users &mdash; table may be missing
+            </div>
+          )}
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">
               👥 Users ({users.length})
@@ -209,6 +232,11 @@ export function DevContent({ users, movies, swipes, signals }: DevContentProps) 
             </div>
           </section>
 
+          {movies.length === 0 && errors.some((e) => e.includes("movies")) && (
+            <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 text-sm">
+              Could not load movies &mdash; table may be missing
+            </div>
+          )}
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">
               🎬 Movies ({movies.length})
@@ -303,7 +331,13 @@ export function DevContent({ users, movies, swipes, signals }: DevContentProps) 
       )}
 
       {activeTab === "swipes" && (
-        <section>
+        <div className="space-y-4">
+          {swipes.length === 0 && errors.some((e) => e.includes("swipes")) && (
+            <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 text-sm">
+              Could not load swipes &mdash; table may be missing
+            </div>
+          )}
+          <section>
           <h2 className="text-lg font-semibold text-white mb-2">
             👆 Swipes ({swipes.length})
           </h2>
@@ -346,10 +380,16 @@ export function DevContent({ users, movies, swipes, signals }: DevContentProps) 
             </table>
           </div>
         </section>
+        </div>
       )}
 
       {activeTab === "signals" && (
         <div className="space-y-8">
+          {signals.length === 0 && errors.some((e) => e.includes("signals")) && (
+            <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 text-sm">
+              Could not load signals &mdash; table may be missing
+            </div>
+          )}
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">
               📊 Interest Signals ({signals.length})

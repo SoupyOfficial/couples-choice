@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/app/actions";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { users, movies, swipes, interestSignals } from "@/db/schema";
+import type { User, Movie, Swipe, InterestSignal } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { DevContent } from "./dev-content";
 
@@ -9,10 +10,25 @@ export default async function DevPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [allUsers, allMovies, allSwipes, allSignals] = await Promise.all([
-    db.select().from(users),
-    db.select().from(movies).orderBy(desc(movies.createdAt)),
-    db
+  const errors: string[] = [];
+
+  let allUsers: User[] = [];
+  try {
+    allUsers = await db.select().from(users);
+  } catch (e) {
+    errors.push(`users: ${(e as Error).message}`);
+  }
+
+  let allMovies: Movie[] = [];
+  try {
+    allMovies = await db.select().from(movies).orderBy(desc(movies.createdAt));
+  } catch (e) {
+    errors.push(`movies: ${(e as Error).message}`);
+  }
+
+  let allSwipes: Swipe[] = [];
+  try {
+    allSwipes = await db
       .select({
         id: swipes.id,
         userId: swipes.userId,
@@ -21,9 +37,20 @@ export default async function DevPage() {
         createdAt: swipes.createdAt,
       })
       .from(swipes)
-      .orderBy(desc(swipes.createdAt)),
-    db.select().from(interestSignals).orderBy(desc(interestSignals.createdAt)),
-  ]);
+      .orderBy(desc(swipes.createdAt));
+  } catch (e) {
+    errors.push(`swipes: ${(e as Error).message}`);
+  }
+
+  let allSignals: InterestSignal[] = [];
+  try {
+    allSignals = await db
+      .select()
+      .from(interestSignals)
+      .orderBy(desc(interestSignals.createdAt));
+  } catch (e) {
+    errors.push(`signals: ${(e as Error).message}`);
+  }
 
   return (
     <main className="flex min-h-dvh flex-col items-center px-4 py-6 sm:py-8">
@@ -40,6 +67,7 @@ export default async function DevPage() {
         movies={allMovies}
         swipes={allSwipes}
         signals={allSignals}
+        errors={errors}
       />
     </main>
   );
